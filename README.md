@@ -1,2 +1,3 @@
 # legosigno
-Bookmark your most used folders
+
+legosigno in esperanto means bookmark

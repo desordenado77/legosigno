@@ -126,15 +126,15 @@ func (legosigno *Legosigno) WriteBookmarkFile() (err error) {
 	legosigno.bookmarkFile.Seek(0, io.SeekStart)
 
 	encoder := json.NewEncoder(legosigno.bookmarkFile) 
-	fmt.Println(legosigno.bookmarks)
+	Trace.Println(legosigno.bookmarks)
 	err = encoder.Encode(legosigno.bookmarks)
 
 	if err != nil {
-		fmt.Println("err: ", err)
+		Error.Println("err: ", err)
+		os.Exit(1)
 	}
 	return nil
 }
-
 
 func main() {
 	
@@ -152,8 +152,10 @@ func main() {
 	getopt.SetUsage(usage)
 
 	optHelp := getopt.BoolLong("Help", 'h', "Show this message")
-	optVerbose := getopt.IntLong("Verbose", 'v', 0, "Set verbosity: 0 to 3")
+	optVerbose := getopt.IntLong("Verbose", 'v', 0, "Set verbosity: 0 to 3. Verbose set to -1 everything goes to stderr. This is used for the cd case in which the output of the application goes to cd.")
 	optBookmark := getopt.BoolLong("Bookmark", 'b', "Bookmark current folder")
+	optList := getopt.BoolLong("List", 'l', "Show all bookmarks")
+	optChangeDirectory := getopt.IntLong("Cd", 'c', -1, "Change to directory. This display the folder by its index. Pass the output of this command to cd to change directory like: cd \"$(./legosigno -c 0 | tail -1)\"")
 
 	getopt.Parse()
 
@@ -177,9 +179,15 @@ func main() {
 		vt = os.Stdout
 	}
 
+	if *optVerbose == -1 {
+		InitLogs(os.Stderr, os.Stderr, os.Stderr, os.Stderr)
+	}
+
 	InitLogs(vt, vi, vw, os.Stderr)
 	
 	var legosigno Legosigno
+
+	legosigno.bookmarkFile = nil
 
 	if *optBookmark {
 		
@@ -210,4 +218,52 @@ func main() {
 		legosigno.WriteBookmarkFile()
 	}
 
+	if *optList {
+		legosigno.OpenBookmarkFile()
+		defer legosigno.bookmarkFile.Close()
+
+		index := 0
+
+		fmt.Println("Bookmarks:")
+		fmt.Println("----------")
+		for _, element := range legosigno.bookmarks.Bookmarks {
+			fmt.Printf(" %d) %s\n", index, element.Folder)
+			index = index + 1
+		}
+		fmt.Println()
+		fmt.Println("Visited often:")
+		fmt.Println("--------------")
+		for _, element := range legosigno.bookmarks.Visits {
+			fmt.Printf(" %d) %s  -  %d\n", index, element.Folder, element.Score)
+			index = index + 1
+		}
+		fmt.Println()
+	}
+
+	if *optChangeDirectory != -1 {
+		legosigno.OpenBookmarkFile()
+		defer legosigno.bookmarkFile.Close()
+
+		index := 0
+
+		for _, element := range legosigno.bookmarks.Bookmarks {
+			if index == *optChangeDirectory {
+				fmt.Println(element.Folder)
+				os.Exit(0)
+			}
+			index = index + 1
+		}
+
+		if index <= *optChangeDirectory {
+
+			for _, element := range legosigno.bookmarks.Visits {
+				if index == *optChangeDirectory {
+					fmt.Println(element.Folder)
+					os.Exit(0)
+				}
+				index = index + 1
+			}
+		}
+		os.Exit(-1)
+	}
 }
