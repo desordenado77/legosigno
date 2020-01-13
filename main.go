@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os/user"
 	"strings"
+	"bufio"
 
 	"github.com/pborman/getopt"
 )
@@ -15,6 +16,7 @@ import (
 
 const LEGOSIGNO_ENV = "LEGOSIGNO_CONF"
 const BOOKMARKS_FILENAME = "bookmarks.json"
+const VISITED_FILENAME = "visited_folders"
 const LEGOSIGNO_FOLDER_PATTERN = "%s/.legosigno/"
 var LEGOSIGNO_FOLDER string
 
@@ -39,6 +41,8 @@ type Bookmarks struct {
 type Legosigno struct {
 	bookmarks Bookmarks
 	bookmarkFile *os.File
+	configFolder string
+	writeJson bool
 }
 
 func InitLogs(
@@ -72,33 +76,38 @@ func usage() {
 }
 
 func openOrCreateFile(filename string) (file *os.File, err error) {
-	jsonFile, err := os.OpenFile(filename, os.O_RDWR, os.ModePerm)
+	file, err = os.OpenFile(filename, os.O_RDWR, os.ModePerm)
 	if err != nil {
 		
 		os.MkdirAll(strings.Replace(filename, BOOKMARKS_FILENAME, "", 1), os.ModePerm)
 
 		Trace.Println("Unable to open bookmark file, creating it")
-		jsonFile, err = os.OpenFile(filename, os.O_CREATE|os.O_RDWR, os.ModePerm)
+		file, err = os.OpenFile(filename, os.O_CREATE|os.O_RDWR, os.ModePerm)
 		if err != nil {
 			Error.Println("Unable to create file:", err)
 			return nil, err
 		}
 	}
 
-	return jsonFile, nil
+	return file, nil
 }
 
-func (legosigno *Legosigno) OpenBookmarkFile() (err error) {
-	var filename string
 
+func (legosigno *Legosigno) SetConfigFolder() {
 	c, exist := os.LookupEnv(LEGOSIGNO_ENV)
 
 	if exist {
-		filename = c + "/" + BOOKMARKS_FILENAME
+		legosigno.configFolder = c
 
 	} else {
-		filename = LEGOSIGNO_FOLDER + BOOKMARKS_FILENAME
+		legosigno.configFolder = LEGOSIGNO_FOLDER
 	}
+}
+
+
+func (legosigno *Legosigno) OpenBookmarkFile() (err error) {
+	filename := legosigno.configFolder + "/" + BOOKMARKS_FILENAME
+
 	legosigno.bookmarkFile, err = openOrCreateFile(filename)
 	if err != nil {
 		return err
@@ -135,6 +144,45 @@ func (legosigno *Legosigno) WriteBookmarkFile() (err error) {
 	}
 	return nil
 }
+
+
+func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
+	
+	filename := legosigno.configFolder + "/" + VISITED_FILENAME
+
+	visitedFile, err := openOrCreateFile(filename)
+	if err != nil {
+		return err
+	}
+	defer visitedFile.Close()
+ 
+	fileScanner := bufio.NewScanner(visitedFile)
+	fileScanner.Split(bufio.ScanLines)
+ 
+	for fileScanner.Scan() {
+		folder := fileScanner.Text()
+		notFound := true
+		for k, element := range legosigno.bookmarks.Visits {
+			if element.Folder == folder {
+				legosigno.bookmarks.Visits[k].Score = legosigno.bookmarks.Visits[k].Score + 1
+				legosigno.writeJson = true
+				notFound = false
+				break;
+			}
+		}
+		if notFound {
+			var e Folder
+			e.Folder = folder
+			e.Score = 1
+			legosigno.bookmarks.Visits = append(legosigno.bookmarks.Visits, e)
+			legosigno.writeJson = true
+		}
+	}
+
+	visitedFile.Truncate(0)
+	return nil
+}
+
 
 func main() {
 	
@@ -187,23 +235,26 @@ func main() {
 	
 	var legosigno Legosigno
 
-	legosigno.bookmarkFile = nil
+	legosigno.writeJson = false
+	legosigno.SetConfigFolder()
+	legosigno.OpenBookmarkFile()
+	defer legosigno.bookmarkFile.Close()
+
+	legosigno.ProcessVisitedFolders()
 
 	if *optBookmark {
-		
 		curr_dir, err := os.Getwd()
 		if err != nil {
 			Error.Println("Unable to get working directory:", err)
 			os.Exit(1)
 		}
 		
-		legosigno.OpenBookmarkFile()
-		defer legosigno.bookmarkFile.Close()
 		notfound := true
 		for k, element := range legosigno.bookmarks.Bookmarks {
 			if element.Folder == curr_dir {
 				legosigno.bookmarks.Bookmarks[k].Score = legosigno.bookmarks.Bookmarks[k].Score + 1 
 				notfound = false
+				legosigno.writeJson = true
 				break
 			}
 		}
@@ -213,15 +264,15 @@ func main() {
 			e.Folder = curr_dir
 			e.Score = 1
 			legosigno.bookmarks.Bookmarks = append(legosigno.bookmarks.Bookmarks, e)
+			legosigno.writeJson = true
 		}
+	}
 
+	if legosigno.writeJson {
 		legosigno.WriteBookmarkFile()
 	}
 
 	if *optList {
-		legosigno.OpenBookmarkFile()
-		defer legosigno.bookmarkFile.Close()
-
 		index := 0
 
 		fmt.Println("Bookmarks:")
@@ -241,9 +292,6 @@ func main() {
 	}
 
 	if *optChangeDirectory != -1 {
-		legosigno.OpenBookmarkFile()
-		defer legosigno.bookmarkFile.Close()
-
 		index := 0
 
 		for _, element := range legosigno.bookmarks.Bookmarks {
