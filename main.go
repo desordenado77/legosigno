@@ -19,6 +19,13 @@ const LEGOSIGNO_ENV = "LEGOSIGNO_CONF"
 const BOOKMARKS_FILENAME = "bookmarks.json"
 const VISITED_FILENAME = "visited_folders"
 const LEGOSIGNO_FOLDER_PATTERN = "%s/.legosigno/"
+const LEGOSIGNO_LOG_VISITED = "legosigno -V"
+const PROMPT_COMMAND = "PROMPT_COMMAND"
+const CDB_ALIAS = "cdb() { if [ $# -eq 0 ]; then legosigno -b; else OUTPUT=\"$(legosigno -c $1)\"; if [ $? -eq 0 ]; then cd $OUTPUT; else echo \"legosigno failed. Could not cd to folder $1\"; fi; fi }"
+const CDL_ALIAS = "alias cdl='legosigno -l'"
+const CDR_ALIAS = "alias cdr='legosigno -r'"
+const LEGOSIGNO_HEADER = "################### Legosigno Start ###################"
+const LEGOSIGNO_FOOTER = "###################  Legosigno End  ###################"
 var LEGOSIGNO_FOLDER string
 
 
@@ -229,6 +236,33 @@ func removeFolder(index int, folder []Folder) []Folder {
 	return folder
 }
 
+
+func quicksort(a []Folder) []Folder {
+	if len(a) < 2 {
+	    return a
+	}
+	  
+	left, right := 0, len(a)-1
+	  
+	pivot := len(a)/2
+	  
+	a[pivot], a[right] = a[right], a[pivot]
+	  
+	for i, _ := range a {
+	    if a[i].Score > a[right].Score {
+		a[left], a[i] = a[i], a[left]
+		left++
+	    }
+	}
+	  
+	a[left], a[right] = a[right], a[left]
+	  
+	quicksort(a[:left])
+	quicksort(a[left+1:])
+	  
+	return a
+}
+
 func main() {
 	
 	InitLogs(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
@@ -251,6 +285,7 @@ func main() {
 	optList := getopt.BoolLong("List", 'l', "Show all bookmarks")
 	optChangeDirectory := getopt.IntLong("Cd", 'c', -1, "Change to directory. This display the folder by its index. Pass the output of this command to cd to change directory like: cd \"$(./legosigno -c 0 | tail -1)\"")
 	optRemoveEntry := getopt.StringLong("Remove", 'r', "-1", "Remove bookmarked folder either by index or folder name")
+	optInstall := getopt.BoolLong("Install", 'i', "Install legosigno")
 
 	getopt.Parse()
 
@@ -280,6 +315,42 @@ func main() {
 
 	InitLogs(vt, vi, vw, os.Stderr)
 	
+	if *optInstall {
+		// add cdb alias in bashrc to perform a cd to a bookmarked folder
+		// added PROMPT_COMMAND to log visited folders
+
+		c, exist := os.LookupEnv(PROMPT_COMMAND)
+
+		// This is a basic-lazy check. Could be improved, but it is probably not worth it 
+		if !exist || (exist && -1 == strings.Index(c, LEGOSIGNO_LOG_VISITED))  {
+			// Need to append to .bashrc file
+			f, err := os.OpenFile(usr.HomeDir+"/.bashrc", os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				Error.Println(err)
+				os.Exit(1)
+			}
+			defer f.Close()
+			p := ""
+			if exist {
+				p = c + ";"
+			}
+			if _, err := f.WriteString("\n"+ LEGOSIGNO_HEADER+ 
+					"\nexport "+ PROMPT_COMMAND+"=\""+p+LEGOSIGNO_LOG_VISITED+"\"\n"+
+					CDB_ALIAS+"\n"+
+					CDR_ALIAS+"\n"+
+					CDL_ALIAS+"\n" + 
+					LEGOSIGNO_FOOTER + "\n"); err != nil {
+				log.Println(err)
+			}
+			fmt.Println("legosigno installed in .bashrc")
+			fmt.Println("Do \"source ~/.bashrc\" to reload it")
+		} else {
+			fmt.Println("Nothing to do. Seems like PROMPT_COMMAND already calls legosigno")
+		}
+		os.Exit(0)
+	}
+
+
 	var legosigno Legosigno
 
 	legosigno.writeJson = false
@@ -379,11 +450,11 @@ func main() {
 		}
 	}
 
-	if legosigno.writeJson {
-		legosigno.WriteBookmarkFile()
-	}
 
 	if *optList {
+		legosigno.bookmarks.Visits = quicksort(legosigno.bookmarks.Visits)
+		// should be able to figure out if there has been changes or not
+		legosigno.writeJson = true
 		index := 0
 
 		fmt.Println("Bookmarks:")
@@ -400,6 +471,11 @@ func main() {
 			index = index + 1
 		}
 		fmt.Println()
+	}
+
+	
+	if legosigno.writeJson {
+		legosigno.WriteBookmarkFile()
 	}
 
 	if *optChangeDirectory != -1 {
