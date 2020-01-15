@@ -457,6 +457,7 @@ func main() {
 		legosigno.writeJson = true
 		index := 0
 
+		fmt.Println()
 		fmt.Println("Bookmarks:")
 		fmt.Println("----------")
 		for _, element := range legosigno.bookmarks.Bookmarks {
@@ -466,9 +467,14 @@ func main() {
 		fmt.Println()
 		fmt.Println("Visited often:")
 		fmt.Println("--------------")
+		visitedIndex := 0
 		for _, element := range legosigno.bookmarks.Visits {
 			fmt.Printf(" %d) %s  -  %d\n", index, element.Folder, element.Score)
 			index = index + 1
+			visitedIndex = visitedIndex + 1
+			if visitedIndex >= 10 {
+				break
+			}
 		}
 		fmt.Println()
 	}
