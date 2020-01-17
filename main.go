@@ -52,6 +52,8 @@ type Legosigno struct {
 	bookmarkFile *os.File
 	configFolder string
 	writeJson bool
+	printListTo io.Writer
+	totalBookmarks int
 }
 
 func InitLogs(
@@ -281,6 +283,73 @@ func quicksort(a []Folder) []Folder {
 	return a
 }
 
+
+func (legosigno *Legosigno) PrintBoookmarks() {
+	legosigno.totalBookmarks = 0
+	fmt.Fprintln(legosigno.printListTo)
+	fmt.Fprintln(legosigno.printListTo,"Bookmarks:")
+	fmt.Fprintln(legosigno.printListTo,"----------")
+	for _, element := range legosigno.bookmarks.Bookmarks {
+		fmt.Fprintf(legosigno.printListTo," %d) %s\n", legosigno.totalBookmarks, element.Folder)
+		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
+	}
+	fmt.Fprintln(legosigno.printListTo)
+	fmt.Fprintln(legosigno.printListTo,"Visited often:")
+	fmt.Fprintln(legosigno.printListTo,"--------------")
+	visitedIndex := 0
+	for _, element := range legosigno.bookmarks.Visits {
+		fmt.Fprintf(legosigno.printListTo," %d) %s  -  %d\n", legosigno.totalBookmarks, element.Folder, element.Score)
+		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
+		visitedIndex = visitedIndex + 1
+		if visitedIndex >= 10 {
+			break
+		}
+	}
+	fmt.Fprintln(legosigno.printListTo)
+	legosigno.totalBookmarks = legosigno.totalBookmarks - 1
+}
+
+
+func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
+	cd := -1
+
+	if option == "?" {
+		legosigno.printListTo = os.Stderr
+		
+		legosigno.PrintBoookmarks()
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Fprintln(legosigno.printListTo,"which folder do you want to " + message + "?\n")
+		text, _ := reader.ReadString('\n')
+		text = strings.Replace(strings.ToLower(text), "\n", "", -1)
+		
+		number, err := strconv.Atoi(text)
+		if err == nil && number <=legosigno.totalBookmarks {
+			cd = number
+		} else {
+			if number > legosigno.totalBookmarks {
+				Error.Println("Invalid bookmark index")
+			}
+			if err != nil {
+				Error.Println(err)
+			}
+			os.Exit(-1)
+		}
+
+	} else {
+		if option != "-1" {
+			number, err := strconv.Atoi(option)
+			if err == nil {
+				cd = number 
+			} else {
+				Error.Println("Parameter should be number or ?")
+				Error.Println(err)
+				os.Exit(1)
+			}
+		}
+	}
+	return cd
+}
+
 func main() {
 	
 	InitLogs(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
@@ -301,8 +370,8 @@ func main() {
 	optVerbose := getopt.IntLong("Verbose", 'v', 0, "Set verbosity: 0 to 3. Verbose set to -1 everything goes to stderr. This is used for the cd case in which the output of the application goes to cd.")
 	optBookmark := getopt.BoolLong("Bookmark", 'b', "Bookmark current folder")
 	optList := getopt.BoolLong("List", 'l', "Show all bookmarks")
-	optChangeDirectory := getopt.IntLong("Cd", 'c', -1, "Change to directory. This display the folder by its index. Pass the output of this command to cd to change directory like: cd \"$(./legosigno -c 0 | tail -1)\"")
-	optRemoveEntry := getopt.StringLong("Remove", 'r', "-1", "Remove bookmarked folder either by index or folder name")
+	optChangeDirectory := getopt.StringLong("Cd", 'c', "-1", "Change to directory. This display the folder by its index. Pass the output of this command to cd to change directory like: cd \"$(./legosigno -c 0 | tail -1)\". Use \"?\" to show the list and type the selected folder to change to")
+	optRemoveEntry := getopt.StringLong("Remove", 'r', "-1", "Remove bookmarked folder either by index or folder name. Use \"?\" to show the list and type the selected folder to change to")
 	optInstall := getopt.BoolLong("Install", 'i', "Install legosigno")
 
 	getopt.Parse()
@@ -370,7 +439,7 @@ func main() {
 
 
 	var legosigno Legosigno
-
+	legosigno.printListTo = os.Stdout
 	legosigno.writeJson = false
 	legosigno.SetConfigFolder()
 
@@ -415,10 +484,11 @@ func main() {
 		}
 	}
 
+	
 	if *optRemoveEntry != "-1" {
 		i, err := strconv.Atoi(*optRemoveEntry)
 		index := 0
-		if err != nil {
+		if err != nil && *optRemoveEntry != "?" {
 			// *optRemoveEntry is a string 
 			notFound := true
 			for _, element := range legosigno.bookmarks.Bookmarks {
@@ -445,7 +515,10 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		// *optRemoveEntry is a int index 
+
+		// *optRemoveEntry is a int index or a ?
+		i = legosigno.ChooseBoookmark(*optRemoveEntry, "remove")
+		
 		index = 0
 
 		for k, _ := range legosigno.bookmarks.Bookmarks {
@@ -472,28 +545,8 @@ func main() {
 	if *optList {
 		// should be able to figure out if there has been changes or not
 		legosigno.writeJson = true
-		index := 0
-
-		fmt.Println()
-		fmt.Println("Bookmarks:")
-		fmt.Println("----------")
-		for _, element := range legosigno.bookmarks.Bookmarks {
-			fmt.Printf(" %d) %s\n", index, element.Folder)
-			index = index + 1
-		}
-		fmt.Println()
-		fmt.Println("Visited often:")
-		fmt.Println("--------------")
-		visitedIndex := 0
-		for _, element := range legosigno.bookmarks.Visits {
-			fmt.Printf(" %d) %s  -  %d\n", index, element.Folder, element.Score)
-			index = index + 1
-			visitedIndex = visitedIndex + 1
-			if visitedIndex >= 10 {
-				break
-			}
-		}
-		fmt.Println()
+		
+		legosigno.PrintBoookmarks()
 	}
 
 	
@@ -501,21 +554,24 @@ func main() {
 		legosigno.WriteBookmarkFile()
 	}
 
-	if *optChangeDirectory != -1 {
+	cd := legosigno.ChooseBoookmark(*optChangeDirectory, "change to")
+
+	if cd != -1 {
+
 		index := 0
 
 		for _, element := range legosigno.bookmarks.Bookmarks {
-			if index == *optChangeDirectory {
+			if index == cd {
 				fmt.Println(element.Folder)
 				os.Exit(0)
 			}
 			index = index + 1
 		}
 
-		if index <= *optChangeDirectory {
+		if index <= cd {
 
 			for _, element := range legosigno.bookmarks.Visits {
-				if index == *optChangeDirectory {
+				if index == cd {
 					fmt.Println(element.Folder)
 					os.Exit(0)
 				}
