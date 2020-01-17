@@ -26,6 +26,7 @@ const CDL_ALIAS = "alias cdl='legosigno -l'"
 const CDR_ALIAS = "alias cdr='legosigno -r'"
 const LEGOSIGNO_HEADER = "################### Legosigno Start ###################"
 const LEGOSIGNO_FOOTER = "###################  Legosigno End  ###################"
+const MAX_AMOUNT_OF_VISITED_FOLDERS = 50
 var LEGOSIGNO_FOLDER string
 
 
@@ -80,7 +81,17 @@ func usage() {
 	w := os.Stdout
 
 	getopt.PrintUsage(w)
-	fmt.Printf("\nExtended usage goes here\n")
+	fmt.Printf("\nLegosigno creates a directory of folder bookmarks for fast browsing through folders\n")
+	fmt.Printf("Two different types of bookmarks are considered: Manually bookmarked folders and visited folders\n")
+	fmt.Printf("The way to store the visited folders list is by making use of the PROMPT_COMMAND in bash.\n")
+	fmt.Printf("In order to be able to jump to a folder a function is created in .bashrc that will change directory (cd) to the location outputed by legosigno -c #.\n")
+	fmt.Printf("To ease setting this up in your console, an install command that will write into ~/.bashrc is created.\n")
+	fmt.Printf("This command will create the following functions and aliases:\n")
+	fmt.Printf("\tcdb: This has dual purpose, with a numerical parameter it jumps to the specified bookmark\n")
+	fmt.Printf("\t\twith no parameter it will bookmark the current folder\n")
+	fmt.Printf("\tcdl: list the current bookmarks\n")
+	fmt.Printf("\tcdr: Remove bookmark\n")
+
 }
 
 func openOrCreateFile(filename string, mode int) (file *os.File, err error) {
@@ -216,6 +227,13 @@ func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
 	}
 
 	visitedFile.Truncate(0)
+
+	legosigno.bookmarks.Visits = quicksort(legosigno.bookmarks.Visits)
+
+	if len(legosigno.bookmarks.Visits) > MAX_AMOUNT_OF_VISITED_FOLDERS {
+		legosigno.bookmarks.Visits = legosigno.bookmarks.Visits[:MAX_AMOUNT_OF_VISITED_FOLDERS]
+	}
+	
 	return nil
 }
 
@@ -452,7 +470,6 @@ func main() {
 
 
 	if *optList {
-		legosigno.bookmarks.Visits = quicksort(legosigno.bookmarks.Visits)
 		// should be able to figure out if there has been changes or not
 		legosigno.writeJson = true
 		index := 0
