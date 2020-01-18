@@ -1,20 +1,21 @@
 package main
+
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"encoding/json"
 	"os/user"
-	"strings"
-	"bufio"
 	"strconv"
+	"strings"
 
 	"github.com/pborman/getopt"
 )
 
-const MAX_VISITED_FOLDERS_SIZE = 10*1024*1024 // max visited folders size 10M 
+const MAX_VISITED_FOLDERS_SIZE = 10 * 1024 * 1024 // max visited folders size 10M
 const LEGOSIGNO_ENV = "LEGOSIGNO_CONF"
 const BOOKMARKS_FILENAME = "bookmarks.json"
 const VISITED_FILENAME = "visited_folders"
@@ -27,8 +28,8 @@ const CDR_ALIAS = "alias cdr='legosigno -r'"
 const LEGOSIGNO_HEADER = "################### Legosigno Start ###################"
 const LEGOSIGNO_FOOTER = "###################  Legosigno End  ###################"
 const MAX_AMOUNT_OF_VISITED_FOLDERS = 50
-var LEGOSIGNO_FOLDER string
 
+var LEGOSIGNO_FOLDER string
 
 var (
 	Trace   *log.Logger
@@ -38,21 +39,21 @@ var (
 )
 
 type Folder struct {
-	Folder string  `json:"folder"`
-	Score int  `json:"score"`
+	Folder string `json:"folder"`
+	Score  int    `json:"score"`
 }
 
 type Bookmarks struct {
 	Bookmarks []Folder `json:"bookmarks"`
-	Visits []Folder `json:"visits"`
+	Visits    []Folder `json:"visits"`
 }
 
 type Legosigno struct {
-	bookmarks Bookmarks
-	bookmarkFile *os.File
-	configFolder string
-	writeJson bool
-	printListTo io.Writer
+	bookmarks      Bookmarks
+	bookmarkFile   *os.File
+	configFolder   string
+	writeJson      bool
+	printListTo    io.Writer
 	totalBookmarks int
 }
 
@@ -113,7 +114,6 @@ func openOrCreateFile(filename string, mode int) (file *os.File, err error) {
 	return file, nil
 }
 
-
 func (legosigno *Legosigno) SetConfigFolder() {
 	c, exist := os.LookupEnv(LEGOSIGNO_ENV)
 
@@ -124,7 +124,6 @@ func (legosigno *Legosigno) SetConfigFolder() {
 		legosigno.configFolder = LEGOSIGNO_FOLDER
 	}
 }
-
 
 func (legosigno *Legosigno) OpenBookmarkFile() (err error) {
 	filename := legosigno.configFolder + "/" + BOOKMARKS_FILENAME
@@ -150,12 +149,11 @@ func (legosigno *Legosigno) OpenBookmarkFile() (err error) {
 	return nil
 }
 
-
 func (legosigno *Legosigno) WriteBookmarkFile() (err error) {
 	legosigno.bookmarkFile.Truncate(0)
 	legosigno.bookmarkFile.Seek(0, io.SeekStart)
 
-	encoder := json.NewEncoder(legosigno.bookmarkFile) 
+	encoder := json.NewEncoder(legosigno.bookmarkFile)
 	Trace.Println(legosigno.bookmarks)
 	err = encoder.Encode(legosigno.bookmarks)
 
@@ -169,13 +167,13 @@ func (legosigno *Legosigno) WriteBookmarkFile() (err error) {
 func (legosigno *Legosigno) addToVisitedFolders(folder string) (err error) {
 	filename := legosigno.configFolder + "/" + VISITED_FILENAME
 
-	visitedFile, err := openOrCreateFile(filename, os.O_RDWR | os.O_APPEND )
+	visitedFile, err := openOrCreateFile(filename, os.O_RDWR|os.O_APPEND)
 	if err != nil {
 		return err
 	}
 	defer visitedFile.Close()
-	
-	_, err = visitedFile.WriteString(folder+"\n")
+
+	_, err = visitedFile.WriteString(folder + "\n")
 
 	fileInfo, err := visitedFile.Stat()
 	if fileInfo.Size() >= MAX_VISITED_FOLDERS_SIZE {
@@ -185,18 +183,17 @@ func (legosigno *Legosigno) addToVisitedFolders(folder string) (err error) {
 		defer legosigno.bookmarkFile.Close()
 
 		legosigno.ProcessVisitedFolders()
-		
+
 		if legosigno.writeJson {
 			legosigno.WriteBookmarkFile()
 		}
 	}
-	
+
 	return err
 }
 
-
 func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
-	
+
 	filename := legosigno.configFolder + "/" + VISITED_FILENAME
 
 	visitedFile, err := openOrCreateFile(filename, os.O_RDWR)
@@ -204,10 +201,10 @@ func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
 		return err
 	}
 	defer visitedFile.Close()
- 
+
 	fileScanner := bufio.NewScanner(visitedFile)
 	fileScanner.Split(bufio.ScanLines)
- 
+
 	for fileScanner.Scan() {
 		folder := fileScanner.Text()
 		notFound := true
@@ -216,7 +213,7 @@ func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
 				legosigno.bookmarks.Visits[k].Score = legosigno.bookmarks.Visits[k].Score + 1
 				legosigno.writeJson = true
 				notFound = false
-				break;
+				break
 			}
 		}
 		if notFound {
@@ -235,13 +232,12 @@ func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
 	if len(legosigno.bookmarks.Visits) > MAX_AMOUNT_OF_VISITED_FOLDERS {
 		legosigno.bookmarks.Visits = legosigno.bookmarks.Visits[:MAX_AMOUNT_OF_VISITED_FOLDERS]
 	}
-	
+
 	return nil
 }
 
-
 func removeFolder(index int, folder []Folder) []Folder {
-	reader := bufio.NewReader(os.Stdin)	
+	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Printf("Are you sure you want to remove \"%s\" from bookmarks? (y/n)\n", folder[index].Folder)
 		text, _ := reader.ReadString('\n')
@@ -256,49 +252,47 @@ func removeFolder(index int, folder []Folder) []Folder {
 	return folder
 }
 
-
 func quicksort(a []Folder) []Folder {
 	if len(a) < 2 {
-	    return a
+		return a
 	}
-	  
+
 	left, right := 0, len(a)-1
-	  
-	pivot := len(a)/2
-	  
+
+	pivot := len(a) / 2
+
 	a[pivot], a[right] = a[right], a[pivot]
-	  
+
 	for i, _ := range a {
-	    if a[i].Score > a[right].Score {
-		a[left], a[i] = a[i], a[left]
-		left++
-	    }
+		if a[i].Score > a[right].Score {
+			a[left], a[i] = a[i], a[left]
+			left++
+		}
 	}
-	  
+
 	a[left], a[right] = a[right], a[left]
-	  
+
 	quicksort(a[:left])
 	quicksort(a[left+1:])
-	  
+
 	return a
 }
-
 
 func (legosigno *Legosigno) PrintBoookmarks() {
 	legosigno.totalBookmarks = 0
 	fmt.Fprintln(legosigno.printListTo)
-	fmt.Fprintln(legosigno.printListTo,"Bookmarks:")
-	fmt.Fprintln(legosigno.printListTo,"----------")
+	fmt.Fprintln(legosigno.printListTo, "Bookmarks:")
+	fmt.Fprintln(legosigno.printListTo, "----------")
 	for _, element := range legosigno.bookmarks.Bookmarks {
-		fmt.Fprintf(legosigno.printListTo," %d) %s\n", legosigno.totalBookmarks, element.Folder)
+		fmt.Fprintf(legosigno.printListTo, " %d) %s\n", legosigno.totalBookmarks, element.Folder)
 		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
 	}
 	fmt.Fprintln(legosigno.printListTo)
-	fmt.Fprintln(legosigno.printListTo,"Visited often:")
-	fmt.Fprintln(legosigno.printListTo,"--------------")
+	fmt.Fprintln(legosigno.printListTo, "Visited often:")
+	fmt.Fprintln(legosigno.printListTo, "--------------")
 	visitedIndex := 0
 	for _, element := range legosigno.bookmarks.Visits {
-		fmt.Fprintf(legosigno.printListTo," %d) %s  -  %d\n", legosigno.totalBookmarks, element.Folder, element.Score)
+		fmt.Fprintf(legosigno.printListTo, " %d) %s  -  %d\n", legosigno.totalBookmarks, element.Folder, element.Score)
 		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
 		visitedIndex = visitedIndex + 1
 		if visitedIndex >= 10 {
@@ -309,21 +303,20 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 	legosigno.totalBookmarks = legosigno.totalBookmarks - 1
 }
 
-
 func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
 	cd := -1
 
 	if option == "?" {
 		legosigno.printListTo = os.Stderr
-		
+
 		legosigno.PrintBoookmarks()
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Fprintln(legosigno.printListTo,"which folder do you want to " + message + "?\n")
+		fmt.Fprintln(legosigno.printListTo, "which folder do you want to "+message+"?\n")
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(strings.ToLower(text), "\n", "", -1)
-		
+
 		number, err := strconv.Atoi(text)
-		if err == nil && number <=legosigno.totalBookmarks {
+		if err == nil && number <= legosigno.totalBookmarks {
 			cd = number
 		} else {
 			if number > legosigno.totalBookmarks {
@@ -339,7 +332,7 @@ func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
 		if option != "-1" {
 			number, err := strconv.Atoi(option)
 			if err == nil {
-				cd = number 
+				cd = number
 			} else {
 				Error.Println("Parameter should be number or ?")
 				Error.Println(err)
@@ -351,7 +344,7 @@ func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
 }
 
 func main() {
-	
+
 	InitLogs(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 
 	usr, err := user.Current()
@@ -401,15 +394,15 @@ func main() {
 	}
 
 	InitLogs(vt, vi, vw, os.Stderr)
-	
+
 	if *optInstall {
 		// add cdb alias in bashrc to perform a cd to a bookmarked folder
 		// added PROMPT_COMMAND to log visited folders
 
 		c, exist := os.LookupEnv(PROMPT_COMMAND)
 
-		// This is a basic-lazy check. Could be improved, but it is probably not worth it 
-		if !exist || (exist && -1 == strings.Index(c, LEGOSIGNO_LOG_VISITED))  {
+		// This is a basic-lazy check. Could be improved, but it is probably not worth it
+		if !exist || (exist && -1 == strings.Index(c, LEGOSIGNO_LOG_VISITED)) {
 			// Need to append to .bashrc file
 			f, err := os.OpenFile(usr.HomeDir+"/.bashrc", os.O_APPEND|os.O_WRONLY, 0644)
 			if err != nil {
@@ -421,12 +414,12 @@ func main() {
 			if exist {
 				p = c + ";"
 			}
-			if _, err := f.WriteString("\n"+ LEGOSIGNO_HEADER+ 
-					"\nexport "+ PROMPT_COMMAND+"=\""+p+LEGOSIGNO_LOG_VISITED+"\"\n"+
-					CDB_ALIAS+"\n"+
-					CDR_ALIAS+"\n"+
-					CDL_ALIAS+"\n" + 
-					LEGOSIGNO_FOOTER + "\n"); err != nil {
+			if _, err := f.WriteString("\n" + LEGOSIGNO_HEADER +
+				"\nexport " + PROMPT_COMMAND + "=\"" + p + LEGOSIGNO_LOG_VISITED + "\"\n" +
+				CDB_ALIAS + "\n" +
+				CDR_ALIAS + "\n" +
+				CDL_ALIAS + "\n" +
+				LEGOSIGNO_FOOTER + "\n"); err != nil {
 				log.Println(err)
 			}
 			fmt.Println("legosigno installed in .bashrc")
@@ -436,7 +429,6 @@ func main() {
 		}
 		os.Exit(0)
 	}
-
 
 	var legosigno Legosigno
 	legosigno.printListTo = os.Stdout
@@ -464,11 +456,11 @@ func main() {
 			Error.Println("Unable to get working directory:", err)
 			os.Exit(1)
 		}
-		
+
 		notfound := true
 		for k, element := range legosigno.bookmarks.Bookmarks {
 			if element.Folder == curr_dir {
-				legosigno.bookmarks.Bookmarks[k].Score = legosigno.bookmarks.Bookmarks[k].Score + 1 
+				legosigno.bookmarks.Bookmarks[k].Score = legosigno.bookmarks.Bookmarks[k].Score + 1
 				notfound = false
 				legosigno.writeJson = true
 				break
@@ -484,12 +476,11 @@ func main() {
 		}
 	}
 
-	
 	if *optRemoveEntry != "-1" {
 		i, err := strconv.Atoi(*optRemoveEntry)
 		index := 0
 		if err != nil && *optRemoveEntry != "?" {
-			// *optRemoveEntry is a string 
+			// *optRemoveEntry is a string
 			notFound := true
 			for _, element := range legosigno.bookmarks.Bookmarks {
 				if element.Folder == *optRemoveEntry {
@@ -499,7 +490,7 @@ func main() {
 				}
 				index = index + 1
 			}
-	
+
 			if notFound {
 				for _, element := range legosigno.bookmarks.Visits {
 					if element.Folder == *optRemoveEntry {
@@ -518,7 +509,7 @@ func main() {
 
 		// *optRemoveEntry is a int index or a ?
 		i = legosigno.ChooseBoookmark(*optRemoveEntry, "remove")
-		
+
 		index = 0
 
 		for k, _ := range legosigno.bookmarks.Bookmarks {
@@ -536,20 +527,18 @@ func main() {
 					break
 				}
 				index = index + 1
-				
+
 			}
 		}
 	}
 
-
 	if *optList {
 		// should be able to figure out if there has been changes or not
 		legosigno.writeJson = true
-		
+
 		legosigno.PrintBoookmarks()
 	}
 
-	
 	if legosigno.writeJson {
 		legosigno.WriteBookmarkFile()
 	}
