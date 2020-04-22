@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pborman/getopt"
 )
@@ -28,6 +29,7 @@ const CDR_ALIAS = "alias cdr='legosigno -r'"
 const LEGOSIGNO_HEADER = "################### Legosigno Start ###################"
 const LEGOSIGNO_FOOTER = "###################  Legosigno End  ###################"
 const MAX_AMOUNT_OF_VISITED_FOLDERS = 50
+const NO_OPTION = -1000
 
 var LEGOSIGNO_FOLDER string
 
@@ -40,7 +42,7 @@ var (
 
 type Folder struct {
 	Folder string `json:"folder"`
-	Score  int    `json:"score"`
+	Score  int64  `json:"score"`
 }
 
 type Bookmarks struct {
@@ -173,7 +175,7 @@ func (legosigno *Legosigno) addToVisitedFolders(folder string) (err error) {
 	}
 	defer visitedFile.Close()
 
-	_, err = visitedFile.WriteString(folder + "\n")
+	_, err = visitedFile.WriteString(folder + " " + strconv.FormatInt(time.Now().UnixNano(), 10) + "\n")
 
 	fileInfo, err := visitedFile.Stat()
 	if fileInfo.Size() >= MAX_VISITED_FOLDERS_SIZE {
@@ -206,20 +208,28 @@ func (legosigno *Legosigno) ProcessVisitedFolders() (err error) {
 	fileScanner.Split(bufio.ScanLines)
 
 	for fileScanner.Scan() {
-		folder := fileScanner.Text()
+		folder := strings.Split(fileScanner.Text(), " ")[0]
+		time, err := strconv.ParseInt(strings.Split(fileScanner.Text(), " ")[1], 10, 64)
+
+		if err != nil {
+			Error.Panicln(err)
+		}
+
 		notFound := true
 		for k, element := range legosigno.bookmarks.Visits {
 			if element.Folder == folder {
-				legosigno.bookmarks.Visits[k].Score = legosigno.bookmarks.Visits[k].Score + 1
-				legosigno.writeJson = true
-				notFound = false
-				break
+				if legosigno.bookmarks.Visits[k].Score < time {
+					legosigno.bookmarks.Visits[k].Score = time
+					legosigno.writeJson = true
+					notFound = false
+					break
+				}
 			}
 		}
 		if notFound {
 			var e Folder
 			e.Folder = folder
-			e.Score = 1
+			e.Score = time
 			legosigno.bookmarks.Visits = append(legosigno.bookmarks.Visits, e)
 			legosigno.writeJson = true
 		}
@@ -305,7 +315,8 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 		} else {
 			fmt.Fprintf(legosigno.printListTo, "\033[2m")
 		}
-		fmt.Fprintf(legosigno.printListTo, " %d) %s  -  %d\n", legosigno.totalBookmarks, element.Folder, element.Score)
+
+		fmt.Fprintf(legosigno.printListTo, " %d) %s\n", legosigno.totalBookmarks, element.Folder)
 		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
 		visitedIndex = visitedIndex + 1
 		if visitedIndex >= 10 {
@@ -318,7 +329,7 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 }
 
 func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
-	cd := -1
+	cd := NO_OPTION
 
 	if option == "?" {
 		legosigno.printListTo = os.Stderr
@@ -343,7 +354,7 @@ func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
 		}
 
 	} else {
-		if option != "-1" {
+		if option != "" {
 			number, err := strconv.Atoi(option)
 			if err == nil {
 				cd = number
@@ -377,7 +388,7 @@ func main() {
 	optVerbose := getopt.IntLong("Verbose", 'v', 0, "Set verbosity: 0 to 3. Verbose set to -1 everything goes to stderr. This is used for the cd case in which the output of the application goes to cd.")
 	optBookmark := getopt.BoolLong("Bookmark", 'b', "Bookmark current folder")
 	optList := getopt.BoolLong("List", 'l', "Show all bookmarks")
-	optChangeDirectory := getopt.StringLong("Cd", 'c', "-1", "Change to directory. This display the folder by its index. Pass the output of this command to cd to change directory like: cd \"$(./legosigno -c 0 | tail -1)\". Use \"?\" to show the list and type the selected folder to change to")
+	optChangeDirectory := getopt.StringLong("Cd", 'c', "", "Change to directory. This display the folder by its index. Pass the output of this command to cd to change directory like: cd \"$(./legosigno -c 0 | tail -1)\". Use \"?\" to show the list and type the selected folder to change to")
 	optRemoveEntry := getopt.StringLong("Remove", 'r', "-1", "Remove bookmarked folder either by index or folder name. Use \"?\" to show the list and type the selected folder to change to")
 	optInstall := getopt.BoolLong("Install", 'i', "Install legosigno")
 
@@ -559,7 +570,7 @@ func main() {
 
 	cd := legosigno.ChooseBoookmark(*optChangeDirectory, "change to")
 
-	if cd != -1 {
+	if cd >= 0 {
 
 		index := 0
 
@@ -582,5 +593,15 @@ func main() {
 			}
 		}
 		os.Exit(-1)
+	} else {
+		if cd < 0 {
+			for k, element := range legosigno.bookmarks.Visits {
+				if (k + 1) == -cd {
+					fmt.Println(element.Folder)
+					os.Exit(0)
+				}
+			}
+		}
 	}
+
 }
