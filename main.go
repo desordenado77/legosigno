@@ -283,15 +283,28 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 	fmt.Fprintln(legosigno.printListTo)
 	fmt.Fprintln(legosigno.printListTo, "Bookmarks:")
 	fmt.Fprintln(legosigno.printListTo, "----------")
-	for _, element := range legosigno.bookmarks.Bookmarks {
+	for k, element := range legosigno.bookmarks.Bookmarks {
+		if k%2 == 0 {
+			fmt.Fprintf(legosigno.printListTo, "\033[0m")
+			fmt.Fprintf(legosigno.printListTo, "\033[1m")
+		} else {
+			fmt.Fprintf(legosigno.printListTo, "\033[2m")
+		}
 		fmt.Fprintf(legosigno.printListTo, " %d) %s\n", legosigno.totalBookmarks, element.Folder)
 		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
 	}
+	fmt.Fprintf(legosigno.printListTo, "\033[0m")
 	fmt.Fprintln(legosigno.printListTo)
 	fmt.Fprintln(legosigno.printListTo, "Visited often:")
 	fmt.Fprintln(legosigno.printListTo, "--------------")
 	visitedIndex := 0
-	for _, element := range legosigno.bookmarks.Visits {
+	for k, element := range legosigno.bookmarks.Visits {
+		if k%2 == 0 {
+			fmt.Fprintf(legosigno.printListTo, "\033[0m")
+			fmt.Fprintf(legosigno.printListTo, "\033[1m")
+		} else {
+			fmt.Fprintf(legosigno.printListTo, "\033[2m")
+		}
 		fmt.Fprintf(legosigno.printListTo, " %d) %s  -  %d\n", legosigno.totalBookmarks, element.Folder, element.Score)
 		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
 		visitedIndex = visitedIndex + 1
@@ -300,6 +313,7 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 		}
 	}
 	fmt.Fprintln(legosigno.printListTo)
+	fmt.Fprintf(legosigno.printListTo, "\033[0m")
 	legosigno.totalBookmarks = legosigno.totalBookmarks - 1
 }
 
