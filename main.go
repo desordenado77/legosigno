@@ -30,6 +30,14 @@ const LEGOSIGNO_HEADER = "################### Legosigno Start ##################
 const LEGOSIGNO_FOOTER = "###################  Legosigno End  ###################"
 const MAX_AMOUNT_OF_VISITED_FOLDERS = 50
 const NO_OPTION = -1000
+const RESET_FONT = "\033[0m"
+const BOLD_FONT = "\033[1m"
+const DIM_FONT = "\033[2m"
+const DARK_GREY_FONT = "\033[90m"
+const LIGHT_GREY_FONT = "\033[37m"
+const COLOR1_FONT = DARK_GREY_FONT // BOLD_FONT 
+const COLOR2_FONT = LIGHT_GREY_FONT // DIM_FONT
+
 
 var LEGOSIGNO_FOLDER string
 
@@ -295,25 +303,25 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 	fmt.Fprintln(legosigno.printListTo, "----------")
 	for k, element := range legosigno.bookmarks.Bookmarks {
 		if k%2 == 0 {
-			fmt.Fprintf(legosigno.printListTo, "\033[0m")
-			fmt.Fprintf(legosigno.printListTo, "\033[1m")
+			fmt.Fprintf(legosigno.printListTo, RESET_FONT)
+			fmt.Fprintf(legosigno.printListTo, COLOR1_FONT)
 		} else {
-			fmt.Fprintf(legosigno.printListTo, "\033[2m")
+			fmt.Fprintf(legosigno.printListTo, COLOR2_FONT)
 		}
 		fmt.Fprintf(legosigno.printListTo, " %d) %s\n", legosigno.totalBookmarks, element.Folder)
 		legosigno.totalBookmarks = legosigno.totalBookmarks + 1
 	}
-	fmt.Fprintf(legosigno.printListTo, "\033[0m")
+	fmt.Fprintf(legosigno.printListTo, RESET_FONT)
 	fmt.Fprintln(legosigno.printListTo)
 	fmt.Fprintln(legosigno.printListTo, "Visited often:")
 	fmt.Fprintln(legosigno.printListTo, "--------------")
 	visitedIndex := 0
 	for k, element := range legosigno.bookmarks.Visits {
 		if k%2 == 0 {
-			fmt.Fprintf(legosigno.printListTo, "\033[0m")
-			fmt.Fprintf(legosigno.printListTo, "\033[1m")
+			fmt.Fprintf(legosigno.printListTo, RESET_FONT)
+			fmt.Fprintf(legosigno.printListTo, COLOR1_FONT)
 		} else {
-			fmt.Fprintf(legosigno.printListTo, "\033[2m")
+			fmt.Fprintf(legosigno.printListTo, COLOR2_FONT)
 		}
 
 		fmt.Fprintf(legosigno.printListTo, " %d) %s\n", legosigno.totalBookmarks, element.Folder)
@@ -324,7 +332,7 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 		}
 	}
 	fmt.Fprintln(legosigno.printListTo)
-	fmt.Fprintf(legosigno.printListTo, "\033[0m")
+	fmt.Fprintf(legosigno.printListTo, RESET_FONT)
 	legosigno.totalBookmarks = legosigno.totalBookmarks - 1
 }
 
