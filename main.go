@@ -338,6 +338,23 @@ func (legosigno *Legosigno) PrintBoookmarks() {
 	legosigno.totalBookmarks = legosigno.totalBookmarks - 1
 }
 
+func (legosigno *Legosigno) FindBookmark(text string) int {
+	cnt := 0
+	for _, element := range legosigno.bookmarks.Bookmarks {
+		if strings.Contains(element.Folder, text) {
+			return cnt
+		}
+		cnt = cnt + 1
+	}
+	for _, element := range legosigno.bookmarks.Visits {
+		if strings.Contains(element.Folder, text) {
+			return cnt
+		}
+		cnt = cnt + 1
+	}
+	return -1
+}
+
 func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
 	cd := NO_OPTION
 
@@ -369,9 +386,13 @@ func (legosigno *Legosigno) ChooseBoookmark(option string, message string) int {
 			if err == nil {
 				cd = number
 			} else {
-				Error.Println("Parameter should be number or ?")
-				Error.Println(err)
-				os.Exit(1)
+				ret := legosigno.FindBookmark(option)
+				if ret == -1 {
+					Error.Println("Parameter should be number or ?")
+					Error.Println(err)
+					os.Exit(1)
+				}
+				return ret
 			}
 		}
 	}
